@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dog Control</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f0f0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    header img {
+      height: 160px;
+    }
+
+    h1 {
+      font-size: 2.5em;
+      text-align: center;
+      color: #333;
+      margin-bottom: 20px;
+    }
+
+    .input-section {
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .input-section input {
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      margin-right: 10px;
+    }
+
+    .input-section button {
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #333;
+      color: #ffc107;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .input-section button:hover {
+      background-color: #555;
+    }
+
+    .controller {
+      display: grid;
+      grid-template-areas:
+        ". up ."
+        "left stop right"
+        ". down .";
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .controller button {
+      background-color: #000;
+      color: #ffc107;
+      border: none;
+      padding: 20px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 24px;
+      text-align: center;
+      width: 80px;
+      height: 80px;
+    }
+
+    .controller button:hover {
+      background-color: #333;
+    }
+
+    .up { grid-area: up; }
+    .down { grid-area: down; }
+    .left { grid-area: left; }
+    .right { grid-area: right; }
+    
+    .controller i {
+      font-size: 32px;
+    }
+
+    @media (max-width: 600px) {
+      .controller button {
+        padding: 15px;
+        width: 60px;
+        height: 60px;
+      }
+    }
+  </style>
+  <!-- Include FontAwesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+  <!-- Include MQTT.js -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+</head>
+<body>
+
+  <header>
+    <img src="https://prayalabs.com/sites/default/files/logo-new.png" alt="Praya Labs Logo">
+    <h1>Dog Control Panel</h1>
+  </header>
+
+  <div class="input-section">
+    <input type="text" id="mqtt-ip" placeholder="Enter MQTT Server IP">
+    <button onclick="testConnection()">Test Server</button>
+  </div>
+
+  <div class="controller">
+    <button onclick="sendCommand('forward')" class="up"><i class="fas fa-arrow-up"></i></button>
+    <button onclick="sendCommand('left')" class="left"><i class="fas fa-arrow-left"></i></button>
+    <button onclick="sendCommand('right')" class="right"><i class="fas fa-arrow-right"></i></button>
+    <button onclick="sendCommand('backward')" class="down"><i class="fas fa-arrow-down"></i></button>
+  </div>
+
+  <script>
+    let mqttClient = null;
+    let mqttHost = '';
+    const mqttPort = 8080;
+    const mqttClientId = "web_client_" + Math.random().toString(16).substr(2, 8);
+
+    // Test the MQTT connection by attempting to connect
+    function testConnection() {
+      mqttHost = document.getElementById('mqtt-ip').value;
+
+      if (!mqttHost) {
+        alert('Please enter a valid MQTT server IP address.');
+        return;
+      }
+
+      // Connect to the MQTT server
+      mqttClient = mqtt.connect(`ws://${mqttHost}:${mqttPort}`, {
+        clientId: mqttClientId
+      });
+
+      mqttClient.on('connect', () => {
+        alert('Connected to the MQTT broker successfully!');
+        console.log('Connected to MQTT broker');
+      });
+
+      mqttClient.on('error', (err) => {
+        alert('Failed to connect to the MQTT broker. Please check the IP address and try again.');
+        console.error('MQTT Connection Error:', err);
+      });
+    }
+
+    // Send command to MQTT based on button click
+    function sendCommand(command) {
+      if (!mqttClient || !mqttClient.connected) {
+        alert('Not connected to any MQTT broker. Please check the connection.');
+        return;
+      }
+
+      const topic = "dog-control";
+      let message = '';
+
+      switch (command) {
+        case 'forward':
+          message = "move forward";
+          break;
+        case 'backward':
+          message = "move backward";
+          break;
+        case 'left':
+          message = "turn left";
+          break;
+        case 'right':
+          message = "turn right";
+          break;
+        default:
+          return;
+      }
+
+      // Publish the message to the dog-control topic
+      mqttClient.publish(topic, message);
+      console.log(`Sent command: ${message} to topic: ${topic}`);
+    }
+  </script>
+
+</body>
+</html>
