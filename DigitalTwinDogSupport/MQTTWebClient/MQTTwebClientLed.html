@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT LED Control</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start; /* Align items to the start for better scrolling */
+            min-height: 100vh; /* Ensure body takes at least full height */
+            margin: 0;
+            padding: 20px;
+            overflow-y: auto; /* Allow vertical scrolling */
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 100%;
+            max-width: 500px; /* Set max-width for better responsiveness */
+        }
+        .logo {
+            display: block;
+            margin: 0 auto 20px; /* Center logo and add bottom margin */
+            width: 300px; /* Set logo width to 300 pixels */
+            height: auto; /* Maintain aspect ratio */
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 18px;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn-on {
+            background-color: #28a745;
+        }
+        .btn-off {
+            background-color: #dc3545;
+        }
+        .status {
+            margin-top: 20px;
+            font-weight: bold;
+        }
+        .text-box {
+            width: calc(100% - 22px); /* Full width minus padding */
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="https://prayalabs.com/sites/default/files/logo-new.png" alt="Company Logo" class="logo">
+        <h1>MQTT LED Control</h1>
+        <input type="text" id="brokerIp" class="text-box" placeholder="Enter Broker IP Address" />
+        <input type="text" id="topic" class="text-box" placeholder="Enter Topic Name" />
+        <button class="btn btn-on" onclick="connectBroker()">Connect</button>
+        <button class="btn btn-on" onclick="sendCommand('on')">Turn On</button>
+        <button class="btn btn-off" onclick="sendCommand('off')">Turn Off</button>
+        <div id="status" class="status">Not Connected</div>
+    </div>
+
+    <!-- Include the MQTT.js library from a CDN -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script>
+        let client;
+
+        // Function to connect to the MQTT broker
+        function connectBroker() {
+            const brokerIp = document.getElementById('brokerIp').value;
+            const brokerUrl = `ws://${brokerIp}:8080`; // WebSocket URL for MQTT
+
+            client = mqtt.connect(brokerUrl);
+
+            const statusElement = document.getElementById('status');
+
+            client.on('connect', function () {
+                statusElement.textContent = 'Connected to MQTT Broker';
+                statusElement.style.color = 'green';
+            });
+
+            client.on('error', function (error) {
+                statusElement.textContent = 'Connection Error: ' + error;
+                statusElement.style.color = 'red';
+            });
+        }
+
+        // Function to send command (on/off) to the MQTT broker
+        function sendCommand(command) {
+            const topic = document.getElementById('topic').value; // Get the topic from the input field
+            if (client && client.connected) {
+                client.publish(topic, command, function (err) {
+                    const statusElement = document.getElementById('status');
+                    if (err) {
+                        statusElement.textContent = 'Error Publishing Message: ' + err;
+                        statusElement.style.color = 'red';
+                    } else {
+                        statusElement.textContent = 'Message Published: ' + command;
+                        statusElement.style.color = 'green';
+                    }
+                });
+            } else {
+                const statusElement = document.getElementById('status');
+                statusElement.textContent = 'Not Connected to MQTT Broker';
+                statusElement.style.color = 'red';
+            }
+        }
+    </script>
+</body>
+</html>

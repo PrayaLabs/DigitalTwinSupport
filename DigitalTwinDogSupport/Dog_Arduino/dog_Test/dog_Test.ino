@@ -13,8 +13,8 @@ int zero2 = 90;  // Initial position for the second servo
 
 void setup() {
   Serial.begin(9600);
-  myservo.attach(5);  // Attach the first servo to GPIO5 (D1)
-  myservo2.attach(4);  // Attach the second servo to GPIO4 (D2)
+  myservo.attach(D4);  // Attach the first servo to GPIO5 (D1)
+  myservo2.attach(D5);  // Attach the second servo to GPIO4 (D2)
 
   myservo.write(zero1);
   myservo2.write(zero2);
@@ -22,7 +22,7 @@ void setup() {
 
 void loop() {
   // You can call these functions inside loop() or trigger them based on some condition
-  forward();  // Example: Move forward
+  //forward();  // Example: Move forward
   delay(200);  // Wait for 2 seconds
   // left();  // Example: Turn left
   // delay(100);
