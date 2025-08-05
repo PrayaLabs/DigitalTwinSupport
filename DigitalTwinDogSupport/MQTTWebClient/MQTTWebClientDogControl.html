@@ -117,6 +117,7 @@
 
   <div class="input-section">
     <input type="text" id="mqtt-ip" placeholder="Enter MQTT Server IP">
+    <input type="text" id="mqtt-topic" placeholder="Enter Topic Name">
     <button onclick="testConnection()">Test Server</button>
   </div>
 
@@ -130,15 +131,17 @@
   <script>
     let mqttClient = null;
     let mqttHost = '';
+    let mqttTopic = '';
     const mqttPort = 8080;
     const mqttClientId = "web_client_" + Math.random().toString(16).substr(2, 8);
 
     // Test the MQTT connection by attempting to connect
     function testConnection() {
       mqttHost = document.getElementById('mqtt-ip').value;
+      mqttTopic = document.getElementById('mqtt-topic').value;
 
-      if (!mqttHost) {
-        alert('Please enter a valid MQTT server IP address.');
+      if (!mqttHost || !mqttTopic) {
+        alert('Please enter both a valid MQTT server IP address and topic name.');
         return;
       }
 
@@ -165,7 +168,6 @@
         return;
       }
 
-      const topic = "dog-control";
       let message = '';
 
       switch (command) {
@@ -185,9 +187,9 @@
           return;
       }
 
-      // Publish the message to the dog-control topic
-      mqttClient.publish(topic, message);
-      console.log(`Sent command: ${message} to topic: ${topic}`);
+      // Publish the message to the topic entered by the user
+      mqttClient.publish(mqttTopic, message);
+      console.log(`Sent command: ${message} to topic: ${mqttTopic}`);
     }
   </script>
 

@@ -2,8 +2,8 @@
 #include <PubSubClient.h>
 #include <Servo.h>  // Include the Servo library
 // Replace these with your WiFi credentials
-const char* ssid = "Praya Labs";
-const char* password = "7kwe6f5cut";
+const char* ssid = "Host";
+const char* password = "12345678";
 
 // Replace this with your MQTT broker information
 const char* mqtt_server = "5.196.78.28";
