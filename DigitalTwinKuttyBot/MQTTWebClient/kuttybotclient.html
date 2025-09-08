@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kutty Bot – MQTT Speak</title>
+  <style>
+    :root{
+      /* Funobotz-ish brand vibe */
+      --brand:#FEB449;         /* primary (button) */
+      --brand-dark:#e0a23d;    /* hover */
+      --ok:#28a745;
+      --bad:#dc3545;
+    }
+    *{box-sizing:border-box}
+    body{
+      font-family: Arial, sans-serif;
+      background:#f4f4f4;
+      margin:0; padding:20px;
+      min-height:100vh; display:flex; align-items:flex-start; justify-content:center;
+    }
+    .container{
+      background:#fff; width:100%; max-width:520px;
+      padding:20px; border-radius:12px;
+      box-shadow:0 6px 20px rgba(0,0,0,.08);
+      text-align:center;
+    }
+    .logo{
+      display:block; margin:0 auto 12px; width:260px; height:auto;
+    }
+    h1{margin:6px 0 16px; font-size:24px}
+    .text-box{
+      width:100%; padding:12px 14px; margin:8px 0;
+      border:1px solid #ddd; border-radius:10px; font-size:16px;
+    }
+    .row{display:flex; gap:10px; margin-top:8px}
+    .row > *{flex:1}
+    .btn{
+      display:inline-block; width:100%;
+      padding:12px 16px; font-size:18px; color:#fff;
+      border:none; border-radius:999px; cursor:pointer;
+      transition:transform .06s ease, opacity .2s ease, background .2s ease;
+    }
+    .btn:active{transform:translateY(1px)}
+    .btn-connect{ background:#333 }
+    .btn-connect:hover{ background:#111 }
+    .btn-speak{ background:var(--brand) }
+    .btn-speak:hover{ background:var(--brand-dark) }
+    .btn[disabled]{opacity:.55; cursor:not-allowed}
+    .status{ margin-top:14px; font-weight:bold }
+    .hint{ font-size:12px; color:#666; margin-top:6px }
+    .count{ font-size:12px; color:#999; text-align:right; margin-top:-4px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img src="https://prayalabs.com/sites/default/files/logo-new.png" alt="Company Logo" class="logo">
+    <h1>Kutty Bot – MQTT Speak</h1>
+
+    <input id="brokerIp" class="text-box" placeholder="Enter Broker IP Address (e.g., 192.168.1.10)" />
+    <input id="topic" class="text-box" placeholder="Enter Topic Name (e.g., kuttybot/say)" />
+
+    <input id="sayText" class="text-box" placeholder="Type what Kutty Bot should say (max 25 chars)" maxlength="25" />
+    <div class="count"><span id="charCount">0</span>/25</div>
+
+    <div class="row">
+      <button class="btn btn-connect" id="connectBtn">Connect</button>
+      <button class="btn btn-speak" id="speakBtn" disabled>Speak</button>
+    </div>
+
+    <div id="status" class="status">Not Connected</div>
+    <div class="hint">Uses MQTT over WebSocket (ws://BROKER_IP:8080) and your browser’s speech synthesis.</div>
+  </div>
+
+  <!-- MQTT.js -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script>
+    let client = null;
+    let connected = false;
+    const statusEl = document.getElementById('status');
+    const connectBtn = document.getElementById('connectBtn');
+    const speakBtn = document.getElementById('speakBtn');
+    const sayText = document.getElementById('sayText');
+    const topicEl = document.getElementById('topic');
+    const brokerEl = document.getElementById('brokerIp');
+    const charCountEl = document.getElementById('charCount');
+
+    // live counter
+    sayText.addEventListener('input', () => {
+      if (sayText.value.length > 25) sayText.value = sayText.value.slice(0,25);
+      charCountEl.textContent = sayText.value.length;
+      validateForm();
+    });
+    brokerEl.addEventListener('input', validateForm);
+    topicEl.addEventListener('input', validateForm);
+
+    connectBtn.addEventListener('click', () => {
+      const brokerIp = brokerEl.value.trim();
+      if (!brokerIp) return setStatus('Enter a Broker IP address', 'bad');
+
+      const url = `ws://${brokerIp}:8080`; // adjust port if your WS listener differs
+      try {
+        client = mqtt.connect(url);
+      } catch (e) {
+        setStatus('Invalid broker URL', 'bad');
+        return;
+      }
+
+      setStatus('Connecting…', 'ok');
+      client.on('connect', () => {
+        connected = true;
+        setStatus('Connected to MQTT Broker', 'ok');
+        validateForm();
+      });
+
+      client.on('error', (err) => {
+        connected = false;
+        setStatus('Connection Error: ' + (err?.message || err), 'bad');
+        validateForm();
+      });
+
+      client.on('close', () => {
+        connected = false;
+        setStatus('Disconnected', 'bad');
+        validateForm();
+      });
+    });
+
+    speakBtn.addEventListener('click', () => {
+      const topic = topicEl.value.trim();
+      const text = sayText.value.trim();
+
+      if (!connected) return setStatus('Not connected to MQTT Broker', 'bad');
+      if (!topic) return setStatus('Enter a topic', 'bad');
+      if (!text) return setStatus('Type something for Kutty Bot to say', 'bad');
+
+      // Publish plain text message
+      client.publish(topic, text, { qos: 0, retain: false }, (err) => {
+        if (err) {
+          setStatus('Error publishing: ' + err, 'bad');
+        } else {
+          setStatus('Published: "' + text + '"', 'ok');
+        }
+      });
+
+      // Speak it with a kid-robotic vibe
+      speakKidRobot(text);
+    });
+
+    function setStatus(msg, type){
+      statusEl.textContent = msg;
+      statusEl.style.color = (type === 'ok') ? 'var(--ok)' : (type === 'bad' ? 'var(--bad)' : '#333');
+    }
+
+    function validateForm(){
+      const ready = connected && brokerEl.value.trim() && topicEl.value.trim() && sayText.value.trim();
+      speakBtn.disabled = !ready;
+    }
+
+    // --- Web Speech: kid-robotic voice helper ---
+    function speakKidRobot(text){
+      if (!('speechSynthesis' in window)) {
+        setStatus('Speech not supported in this browser', 'bad');
+        return;
+      }
+      // cancel any ongoing speech
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+
+      // Try to pick a child/robot-like voice if available
+      const pickVoice = () => {
+        const voices = window.speechSynthesis.getVoices() || [];
+        // Prefer any voice that hints at child/robot
+        let voice =
+          voices.find(v => /child|kid|junior|robot/i.test(v.name)) ||
+          voices.find(v => /English/i.test(v.lang) && /Google/i.test(v.name)) ||
+          voices[0];
+        if (voice) u.voice = voice;
+        // Kid-robot feel
+        u.rate = 1.15;  // a bit faster
+        u.pitch = 1.5;  // higher pitch
+        u.volume = 1.0;
+        window.speechSynthesis.speak(u);
+      };
+
+      if (window.speechSynthesis.getVoices().length === 0) {
+        // Some browsers populate voices async
+        window.speechSynthesis.addEventListener('voiceschanged', pickVoice, { once:true });
+        // Trigger voices load
+        window.speechSynthesis.getVoices();
+        // Fallback start after a tiny delay
+        setTimeout(pickVoice, 300);
+      } else {
+        pickVoice();
+      }
+    }
+  </script>
+</body>
+</html>
