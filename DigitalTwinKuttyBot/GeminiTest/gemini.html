@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Simple Gemini API Test</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    input, button { padding: 10px; margin: 5px 0; width: 100%; }
+    #response { margin-top: 15px; padding: 10px; background: #f0f0f0; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h2>Ask Gemini</h2>
+  <input id="question" placeholder="Type your question here" />
+  <button id="askBtn">Ask</button>
+  <div id="response">Response will appear here...</div>
+
+  <script>
+    const GEMINI_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbx_K32xytWelOteF9qoU8siXzj0O-5Cqpt8gdrZjf-PJqHPi4cGuu3U2qfyAQlZZLFL4w/exec"; // Replace with your deployed GAS WebApp
+
+    document.getElementById("askBtn").addEventListener("click", async () => {
+      const q = document.getElementById("question").value.trim();
+      if (!q) return alert("Please enter a question");
+
+      document.getElementById("response").textContent = "Asking Gemini...";
+
+      try {
+        const url = GEMINI_WEBAPP_URL + "?q=" + encodeURIComponent(q);
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        let text = await resp.text();
+        document.getElementById("response").textContent = text;
+      } catch (err) {
+        document.getElementById("response").textContent = "Error: " + err.message;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kutty Bot – MQTT Speak + Gemini</title>
+  <style>
+    :root{
+      --brand:#FEB449;         /* primary (button) */
+      --brand-dark:#e0a23d;    /* hover */
+      --ok:#28a745;
+      --bad:#dc3545;
+    }
+    *{box-sizing:border-box}
+    body{
+      font-family: Arial, sans-serif;
+      background:#f4f4f4;
+      margin:0; padding:20px;
+      min-height:100vh; display:flex; align-items:flex-start; justify-content:center;
+    }
+    .container{
+      background:#fff; width:100%; max-width:520px;
+      padding:20px; border-radius:12px;
+      box-shadow:0 6px 20px rgba(0,0,0,.08);
+      text-align:center;
+    }
+    .logo{ display:block; margin:0 auto 12px; width:260px; height:auto; }
+    h1{margin:6px 0 16px; font-size:24px}
+    .text-box{
+      width:100%; padding:12px 14px; margin:8px 0;
+      border:1px solid #ddd; border-radius:10px; font-size:16px;
+    }
+    .row{display:flex; gap:10px; margin-top:8px}
+    .row > *{flex:1}
+    .btn{
+      display:inline-block; width:100%;
+      padding:12px 16px; font-size:16px; color:#fff;
+      border:none; border-radius:999px; cursor:pointer;
+      transition:transform .06s ease, opacity .2s ease, background .2s ease;
+    }
+    .btn:active{transform:translateY(1px)}
+    .btn-connect{ background:#333 } .btn-connect:hover{ background:#111 }
+    .btn-speak{ background:var(--brand) } .btn-speak:hover{ background:var(--brand-dark) }
+    .btn-ask{ background:#5a67d8 } .btn-ask:hover{ background:#4451c7 }
+    .btn[disabled]{opacity:.55; cursor:not-allowed}
+    .status{ margin-top:14px; font-weight:bold }
+    .hint{ font-size:12px; color:#666; margin-top:6px }
+    .count{ font-size:12px; color:#999; text-align:right; margin-top:-4px; }
+    .label{font-size:12px; color:#666; text-align:left; margin-top:8px;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img src="https://prayalabs.com/sites/default/files/logo-new.png" alt="Company Logo" class="logo">
+    <h1>Kutty Bot – MQTT Speak</h1>
+
+    <input id="brokerIp" class="text-box" placeholder="Enter Broker IP Address (e.g., 192.168.1.10)" />
+    <input id="topic" class="text-box" placeholder="Enter Topic Name (e.g., kuttybot/say)" />
+
+    <div class="label">Ask Gemini</div>
+    <input id="askText" class="text-box" placeholder="Type your question for Gemini (any length)" />
+
+    <div class="label">What Kutty Bot will say (auto-filled from Gemini or type yourself)</div>
+    <input id="sayText" class="text-box" placeholder="Max 25 characters" maxlength="25" />
+    <div class="count"><span id="charCount">0</span>/25</div>
+
+    <div class="row">
+      <button class="btn btn-connect" id="connectBtn">Connect</button>
+      <button class="btn btn-ask" id="askBtn">Ask Gemini</button>
+      <button class="btn btn-speak" id="speakBtn" disabled>Speak</button>
+    </div>
+
+    <div id="status" class="status">Not Connected</div>
+    <div class="hint">Uses MQTT over WebSocket (ws://BROKER_IP:8080) and your browser’s speech synthesis.</div>
+  </div>
+
+  <!-- MQTT.js -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script>
+    // ----- Elements
+    let client = null;
+    let connected = false;
+
+    const statusEl = document.getElementById('status');
+    const connectBtn = document.getElementById('connectBtn');
+    const speakBtn = document.getElementById('speakBtn');
+    const askBtn = document.getElementById('askBtn');
+
+    const sayText = document.getElementById('sayText');
+    const askText = document.getElementById('askText');
+    const topicEl = document.getElementById('topic');
+    const brokerEl = document.getElementById('brokerIp');
+    const charCountEl = document.getElementById('charCount');
+
+    // ----- Constants
+    const GEMINI_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbx_K32xytWelOteF9qoU8siXzj0O-5Cqpt8gdrZjf-PJqHPi4cGuu3U2qfyAQlZZLFL4w/exec";
+    const MAX_SAY_LEN = 25;
+
+    // ----- Events & helpers
+    sayText.addEventListener('input', () => {
+      if (sayText.value.length > MAX_SAY_LEN) sayText.value = sayText.value.slice(0, MAX_SAY_LEN);
+      charCountEl.textContent = sayText.value.length;
+      validateForm();
+    });
+    brokerEl.addEventListener('input', validateForm);
+    topicEl.addEventListener('input', validateForm);
+    askText.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') askBtn.click();
+    });
+
+    connectBtn.addEventListener('click', () => {
+      const brokerIp = brokerEl.value.trim();
+      if (!brokerIp) return setStatus('Enter a Broker IP address', 'bad');
+
+      const url = `ws://${brokerIp}:8080`; // adjust port if your broker differs
+      try {
+        client = mqtt.connect(url);
+      } catch (e) {
+        setStatus('Invalid broker URL', 'bad');
+        return;
+      }
+
+      setStatus('Connecting…', 'ok');
+      client.on('connect', () => {
+        connected = true;
+        setStatus('Connected to MQTT Broker', 'ok');
+        validateForm();
+      });
+
+      client.on('error', (err) => {
+        connected = false;
+        setStatus('Connection Error: ' + (err?.message || err), 'bad');
+        validateForm();
+      });
+
+      client.on('close', () => {
+        connected = false;
+        setStatus('Disconnected', 'bad');
+        validateForm();
+      });
+    });
+
+    // ---- Ask Gemini flow
+    askBtn.addEventListener('click', async () => {
+      const q = askText.value.trim();
+      if (!q) {
+        setStatus('Type a question for Gemini', 'bad');
+        return;
+      }
+      setStatus('Asking Gemini…', 'ok');
+      askBtn.disabled = true;
+
+      try {
+        // Assumes your Apps Script returns plain text (single line).
+        // If your script expects a different param name, change "q" below.
+        const url = GEMINI_WEBAPP_URL + "?q=" + encodeURIComponent(q);
+        const resp = await fetch(url, { method: "GET", mode: "cors" });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        let text = await resp.text();
+
+        // Normalize to single line and trim
+        text = (text || "").replace(/\r?\n/g, " ").trim();
+        if (!text) throw new Error("Empty response from Gemini");
+
+        // Enforce 25-char limit for speaking box
+        const clipped = text.slice(0, MAX_SAY_LEN);
+        sayText.value = clipped;
+        charCountEl.textContent = clipped.length;
+
+        const wasClipped = text.length > MAX_SAY_LEN;
+        setStatus(`Gemini: “${clipped}”` + (wasClipped ? " (trimmed to 25 chars)" : ""), 'ok');
+
+        // Enable Speak if connected with topic set
+        validateForm();
+      } catch (e) {
+        console.error(e);
+        setStatus('Gemini error: ' + (e?.message || e), 'bad');
+      } finally {
+        askBtn.disabled = false;
+      }
+    });
+
+    // ---- Speak (publish MQTT + TTS)
+    speakBtn.addEventListener('click', () => {
+      const topic = topicEl.value.trim();
+      const text = sayText.value.trim();
+
+      if (!connected) return setStatus('Not connected to MQTT Broker', 'bad');
+      if (!topic) return setStatus('Enter a topic', 'bad');
+      if (!text) return setStatus('Nothing to speak', 'bad');
+
+      client.publish(topic, text, { qos: 0, retain: false }, (err) => {
+        if (err) setStatus('Error publishing: ' + err, 'bad');
+        else setStatus('Published: "' + text + '"', 'ok');
+      });
+
+      speakKidRobot(text);
+    });
+
+    // ---- UI helpers
+    function setStatus(msg, type){
+      statusEl.textContent = msg;
+      statusEl.style.color = (type === 'ok') ? 'var(--ok)' : (type === 'bad' ? 'var(--bad)' : '#333');
+    }
+    function validateForm(){
+      const ready = connected && brokerEl.value.trim() && topicEl.value.trim() && sayText.value.trim();
+      speakBtn.disabled = !ready;
+    }
+
+    // ---- Web Speech helper
+    function speakKidRobot(text){
+      if (!('speechSynthesis' in window)) {
+        setStatus('Speech not supported in this browser', 'bad');
+        return;
+      }
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      const pickVoice = () => {
+        const voices = window.speechSynthesis.getVoices() || [];
+        let voice =
+          voices.find(v => /child|kid|junior|robot/i.test(v.name)) ||
+          voices.find(v => /English/i.test(v.lang) && /Google/i.test(v.name)) ||
+          voices[0];
+        if (voice) u.voice = voice;
+        u.rate = 1.15;
+        u.pitch = 1.5;
+        u.volume = 1.0;
+        window.speechSynthesis.speak(u);
+      };
+      if (window.speechSynthesis.getVoices().length === 0) {
+        window.speechSynthesis.addEventListener('voiceschanged', pickVoice, { once:true });
+        window.speechSynthesis.getVoices();
+        setTimeout(pickVoice, 300);
+      } else {
+        pickVoice();
+      }
+    }
+  </script>
+</body>
+</html>
